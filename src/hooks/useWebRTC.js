@@ -18,7 +18,7 @@ export default function useWebRTC(roomID) {
     }, cb);
   }, [updateClients]);
 
-  // 1️⃣ Подключение к камере
+  // Подключение к камере
   useEffect(() => {
     async function startCapture() {
       localMediaStream.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
@@ -45,7 +45,7 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
     };
   }, [roomID, addNewClient]);
 
-  // 2️⃣ Добавление нового пира
+  // Добавление нового пира
   useEffect(() => {
     async function handleNewPeer({ peerID, createOffer }) {
       if (peerConnections.current[peerID]) return;
@@ -91,7 +91,7 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
     return () => socket.off(ACTIONS.ADD_PEER, handleNewPeer);
   }, [addNewClient]);
 
-  // 3️⃣ Получение SDP
+  // Получение SDP
   useEffect(() => {
     async function setRemoteMedia({ peerID, sessionDescription }) {
       const connection = peerConnections.current[peerID];
@@ -114,7 +114,7 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
     return () => socket.off(ACTIONS.SESSION_DESCRIPTION, setRemoteMedia);
   }, []);
 
-  // 4️⃣ ICE кандидаты
+  // ICE кандидаты
   useEffect(() => {
     const handleIceCandidate = ({ peerID, iceCandidate }) => {
       const connection = peerConnections.current[peerID];
@@ -125,7 +125,7 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
     return () => socket.off(ACTIONS.ICE_CANDIDATE, handleIceCandidate);
   }, []);
 
-  // 5️⃣ Удаление пиров
+  // даление пиров
   useEffect(() => {
     const handleRemovePeer = ({ peerID }) => {
       if (peerConnections.current[peerID]) peerConnections.current[peerID].close();
@@ -138,7 +138,7 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
     return () => socket.off(ACTIONS.REMOVE_PEER, handleRemovePeer);
   }, [updateClients]);
 
-  // 6️⃣ Привязка видео к ID
+  // Привязка видео к ID
   const provideMediaRef = useCallback((id, node) => {
     peerMediaElements.current[id] = node;
   }, []);
