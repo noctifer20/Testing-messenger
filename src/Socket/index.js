@@ -1,7 +1,10 @@
-import { io } from "socket.io-client";
+import { io } from 'socket.io-client';
 
-const socket = io("http://localhost:3001", {
-  transports: ["websocket"],
-});
+const socket = io(
+  `${window.location.protocol}//${window.location.hostname}:3001`,
+  {
+    transports: ['websocket'],
+  }
+);
 
 export default socket;

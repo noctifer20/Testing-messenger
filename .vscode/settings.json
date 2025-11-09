@@ -1,0 +1,50 @@
+{
+  // Enable format on save
+  "editor.formatOnSave": true,
+  
+  // Set Prettier as the default formatter
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  
+  // Enable ESLint auto-fix on save
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  
+  // Enable ESLint for JavaScript and JSX files
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact"
+  ],
+  
+  // Enable ESLint
+  "eslint.enable": true,
+  
+  // Format specific file types with Prettier
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  
+  // Optional: Show ESLint status in the status bar
+  "eslint.alwaysShowStatus": true,
+  
+  // Optional: Auto-fix ESLint issues on save
+  "eslint.format.enable": true
+}
+

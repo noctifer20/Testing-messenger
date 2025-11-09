@@ -1,28 +1,36 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import useStateWithCallBack from '../hooks/useStateWithCallBack';
-import socket from "../Socket";
-import ACTIONS from "../Socket/actions";
+import socket from '../Socket';
+import ACTIONS from '../Socket/actions';
+import Logger from '../utils/logger';
 
 export const LOCAL_VIDEO = 'LOCAL_VIDEO';
 
-export default function useWebRTC(roomID) {
+const log = Logger.withContext('useWebRTC');
+export default function useWebRTC(id) {
   const [clients, updateClients] = useStateWithCallBack([]);
   const peerConnections = useRef({});
   const localMediaStream = useRef(null);
   const peerMediaElements = useRef({ [LOCAL_VIDEO]: null });
 
-  const addNewClient = useCallback((newClient, cb) => {
-    updateClients(list => {
-      if (!list.includes(newClient)) return [...list, newClient];
-      return list;
-    }, cb);
-  }, [updateClients]);
+  const addNewClient = useCallback(
+    (newClient, cb) => {
+      updateClients((list) => {
+        if (!list.includes(newClient)) return [...list, newClient];
+        return list;
+      }, cb);
+    },
+    [updateClients]
+  );
 
   // Подключение к камере
   useEffect(() => {
     async function startCapture() {
-      localMediaStream.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-console.log('Local tracks:', localMediaStream.current.getTracks());
+      localMediaStream.current = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true,
+      });
+      log.debug('Local tracks:', localMediaStream.current.getTracks());
       addNewClient(LOCAL_VIDEO, () => {
         const localVideoElement = peerMediaElements.current[LOCAL_VIDEO];
         if (localVideoElement) {
@@ -32,42 +40,65 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
       });
 
       // Только после готовности потока присоединяемся к комнате
-      socket.emit(ACTIONS.JOIN, { room: roomID });
+      log.info('Joining room:', id);
+      socket.emit(ACTIONS.JOIN, { id });
     }
 
-    startCapture().catch(e => console.error('Error getting UserMedia', e));
+    startCapture().catch((e) => log.error('Error getting UserMedia', e));
 
     return () => {
       if (localMediaStream.current) {
-        localMediaStream.current.getTracks().forEach(track => track.stop());
+        localMediaStream.current.getTracks().forEach((track) => track.stop());
       }
+      log.info('leave room', { id });
       socket.emit(ACTIONS.LEAVE);
     };
-  }, [roomID, addNewClient]);
+  }, [id, addNewClient]);
 
   // Добавление нового пира
   useEffect(() => {
     async function handleNewPeer({ peerID, createOffer }) {
-      if (peerConnections.current[peerID]) return;
+      log.info('peer connections', peerConnections.current);
+      if (peerConnections.current[peerID]) {
+        log.warn(`Peer ${peerID} already exists`);
+        return;
+      }
 
+      log.info(`Adding new peer: ${peerID}`, { createOffer });
       const connection = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       });
       peerConnections.current[peerID] = connection;
 
       // Логи для отладки
-      connection.onicecandidate = event => {
+      connection.onicecandidate = (event) => {
+        log.debug('ICE candidate', { peerID, event });
         if (event.candidate) {
-          socket.emit(ACTIONS.RELAY_ICE, { peerID, iceCandidate: event.candidate });
+          socket.emit(ACTIONS.RELAY_ICE, {
+            peerID,
+            iceCandidate: event.candidate,
+          });
         }
       };
 
       connection.oniceconnectionstatechange = () => {
-        console.log(peerID, 'ICE state:', connection.iceConnectionState);
+        log.debug(
+          `ICE state changed for ${peerID}:`,
+          connection.iceConnectionState
+        );
+        if (connection.iceConnectionState === 'failed') {
+          log.warn(`ICE connection failed for peer: ${peerID}`);
+        }
       };
 
       connection.onconnectionstatechange = () => {
-        console.log(peerID, 'Connection state:', connection.connectionState);
+        log.debug(
+          `Connection state changed for ${peerID}:`,
+          connection.connectionState
+        );
+        if (connection.connectionState === 'failed') {
+          log.error(`Connection failed for peer: ${peerID}`);
+        }
       };
 
       connection.ontrack = ({ streams: [remoteStream] }) => {
@@ -78,7 +109,11 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
       };
 
       // Отправляем локальные треки
-      localMediaStream.current.getTracks().forEach(track => connection.addTrack(track, localMediaStream.current));
+      localMediaStream.current
+        .getTracks()
+        .forEach((track) =>
+          connection.addTrack(track, localMediaStream.current)
+        );
 
       if (createOffer) {
         const offer = await connection.createOffer();
@@ -98,9 +133,15 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
       if (!connection) return;
 
       try {
-        await connection.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+        await connection.setRemoteDescription(
+          new RTCSessionDescription(sessionDescription)
+        );
+        log.debug(
+          `Set remote description for ${peerID}:`,
+          sessionDescription.type
+        );
       } catch (error) {
-        console.error('Error setting remote description', error);
+        log.error('Error setting remote description', { peerID, error });
       }
 
       if (sessionDescription.type === 'offer') {
@@ -118,25 +159,28 @@ console.log('Local tracks:', localMediaStream.current.getTracks());
   useEffect(() => {
     const handleIceCandidate = ({ peerID, iceCandidate }) => {
       const connection = peerConnections.current[peerID];
-      if (connection) connection.addIceCandidate(new RTCIceCandidate(iceCandidate));
+      if (connection)
+        connection.addIceCandidate(new RTCIceCandidate(iceCandidate));
     };
 
     socket.on(ACTIONS.ICE_CANDIDATE, handleIceCandidate);
     return () => socket.off(ACTIONS.ICE_CANDIDATE, handleIceCandidate);
   }, []);
 
-  // даление пиров
+  // Удаление пиров
   useEffect(() => {
     const handleRemovePeer = ({ peerID }) => {
-      if (peerConnections.current[peerID]) peerConnections.current[peerID].close();
+      log.info(`Removing peer: ${peerID}`);
+      if (peerConnections.current[peerID])
+        peerConnections.current[peerID].close();
       delete peerConnections.current[peerID];
       delete peerMediaElements.current[peerID];
-      updateClients(list => list.filter(c => c !== peerID));
+      updateClients((list) => list.filter((c) => c !== peerID));
     };
 
     socket.on(ACTIONS.REMOVE_PEER, handleRemovePeer);
     return () => socket.off(ACTIONS.REMOVE_PEER, handleRemovePeer);
-  }, [updateClients]);
+  }, [updateClients, log]);
 
   // Привязка видео к ID
   const provideMediaRef = useCallback((id, node) => {
